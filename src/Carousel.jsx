@@ -4,7 +4,7 @@ import { AnimatePresence, motion, useMotionValue, useMotionValueEvent, animate a
 import Panel, { PARALLAX_DEFAULTS } from "./Panel";
 import { SLIDES } from "./slides";
 import { getWrappedIndex, SPRING, REF_WIDTH, MIN_FIT_SCALE } from "./panelStates";
-import TweakPanel, { buildInitialOverrides } from "./TweakPanel";
+import { buildInitialOverrides } from "./TweakPanel";
 import { LIGHTING_DEFAULTS } from "./CardLighting";
 import StageReflection, { REFLECTION_DEFAULTS } from "./StageReflection";
 
@@ -810,29 +810,6 @@ export default function Carousel() {
         </button>
       </div>
 
-      {/* Developer tweak panel — remove before shipping */}
-      <div style={chromeStyle}>
-        <TweakPanel
-          overrides={tweakOverrides}
-          onChange={setTweakOverrides}
-          zoom={carouselZoom}
-          onZoomChange={setCarouselZoom}
-          edgeVignette={edgeVignette}
-          onEdgeVignetteChange={setEdgeVignette}
-          lightingConfig={lightingConfig}
-          onLightingChange={setLightingConfig}
-          reflectionConfig={reflectionConfig}
-          onReflectionChange={setReflectionConfig}
-          parallaxConfig={parallaxConfig}
-          onParallaxChange={setParallaxConfig}
-          fullscreenSpeed={fullscreenSpeed}
-          onFullscreenSpeedChange={setFullscreenSpeed}
-          mediaSpeed={mediaSpeed}
-          onMediaSpeedChange={setMediaSpeed}
-          navSpeed={navSpeed}
-          onNavSpeedChange={setNavSpeed}
-        />
-      </div>
 
       {/* Title block — fades a little quicker on fullscreen entry than the
           rest of the chrome so it clears before the card finishes scaling up.
