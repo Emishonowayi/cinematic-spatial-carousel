@@ -593,22 +593,22 @@ export default function Carousel() {
       {/* Mobile gate — CSS-driven, no JS. Sits above everything on small screens. */}
       <div className="mobile-gate">
         <span style={{
-          fontFamily: "'Bootzy', serif",
-          fontSize: 28,
-          fontWeight: "normal",
+          fontFamily: "'NeueMontreal', sans-serif",
+          fontWeight: 500,
+          fontSize: 16,
           color: "#ffffff",
-          lineHeight: 1.3,
-          letterSpacing: "0.01em",
+          lineHeight: 1.5,
+          whiteSpace: "nowrap",
         }}>
-          Mobile support<br />is coming soon
+          Mobile support is coming soon
         </span>
         <span style={{
           fontFamily: "'NeueMontreal', sans-serif",
           fontWeight: 500,
-          fontSize: 14,
-          color: "rgba(255,255,255,0.45)",
-          lineHeight: 1.6,
-          letterSpacing: "0.02em",
+          fontSize: 16,
+          color: "#ffffff",
+          lineHeight: 1.5,
+          whiteSpace: "nowrap",
         }}>
           Please view on desktop.
         </span>
