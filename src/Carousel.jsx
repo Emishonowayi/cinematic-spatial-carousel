@@ -592,6 +592,30 @@ export default function Carousel() {
         flexDirection: "column",
       }}
     >
+      {/* Mobile gate — CSS-driven, no JS. Sits above everything on small screens. */}
+      <div className="mobile-gate">
+        <span style={{
+          fontFamily: "'Bootzy', serif",
+          fontSize: 28,
+          fontWeight: "normal",
+          color: "#ffffff",
+          lineHeight: 1.3,
+          letterSpacing: "0.01em",
+        }}>
+          Mobile support<br />is coming soon
+        </span>
+        <span style={{
+          fontFamily: "'NeueMontreal', sans-serif",
+          fontWeight: 500,
+          fontSize: 14,
+          color: "rgba(255,255,255,0.45)",
+          lineHeight: 1.6,
+          letterSpacing: "0.02em",
+        }}>
+          Please view on desktop.
+        </span>
+      </div>
+
       {/* Stage reflection — spatially anchored to the viewport, not the card
           rail. Sits at zIndex 1 so the floor-gradient/vignette overlays (zIndex 2)
           naturally darken and dissolve its lower portion.
