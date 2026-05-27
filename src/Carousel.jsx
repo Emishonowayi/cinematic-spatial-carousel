@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { flushSync } from "react-dom";
-import { AnimatePresence, motion, useMotionValue, useMotionValueEvent, animate as fmAnimate } from "framer-motion";
+import { AnimatePresence, motion, useMotionValue, useMotionValueEvent, useTransform, animate as fmAnimate } from "framer-motion";
 import Panel, { PARALLAX_DEFAULTS } from "./Panel";
 import { SLIDES } from "./slides";
 import { getWrappedIndex, SPRING, REF_WIDTH, MIN_FIT_SCALE } from "./panelStates";
@@ -159,10 +159,49 @@ export default function Carousel() {
     setReadyCount((n) => Math.min(n + 1, 3));
   }, []);
   useEffect(() => {
-    const minTimer = setTimeout(() => setMinTimeReached(true), 3000);
+    const minTimer = setTimeout(() => setMinTimeReached(true), 2600);
     const fallback  = setTimeout(() => setReadyCount(3), 8000);
     return () => { clearTimeout(minTimer); clearTimeout(fallback); };
   }, []);
+
+  // Entrance animation — starts at 1 (side cards held off-screen), springs to
+  // 0 (their resting positions) the moment siteReady fires. Must live AFTER
+  // siteReady is declared above to avoid a temporal dead zone error.
+  const introMotion = useMotionValue(1);
+  useEffect(() => {
+    if (siteReady) {
+      fmAnimate(introMotion, 0, {
+        type: "tween",
+        duration: 1.1,
+        ease: [0.25, 0.46, 0.45, 0.94],
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [siteReady]);
+  // Inverted: 0 while loading, 1 once intro animation completes.
+  // Used to fade in the center card and the floor reflection.
+  const introOpacity = useTransform(introMotion, (v) => 1 - v);
+
+  // Page-load-only title entrance. Two separate motion values so the meta
+  // line can start its animation slightly later (stagger). Both animate once
+  // when siteReady fires and stay at their final values forever after —
+  // the normal AnimatePresence variants handle all subsequent slide transitions.
+  const titleIntroY       = useMotionValue(40);
+  const titleIntroOpacity = useMotionValue(0);
+  const metaIntroY        = useMotionValue(40);
+  const metaIntroOpacity  = useMotionValue(0);
+  useEffect(() => {
+    if (!siteReady) return;
+    // Match the card slide-in duration (1.1s) so everything settles together.
+    // Meta is staggered 0.14s later, so its duration is shortened by the same
+    // amount — both finish at exactly t = 1.1s.
+    const ease = [0.25, 0.46, 0.45, 0.94];
+    fmAnimate(titleIntroY,       0, { type: "tween", duration: 1.10, ease });
+    fmAnimate(titleIntroOpacity, 1, { type: "tween", duration: 1.10, ease });
+    fmAnimate(metaIntroY,        0, { type: "tween", duration: 0.96, delay: 0.14, ease });
+    fmAnimate(metaIntroOpacity,  1, { type: "tween", duration: 0.96, delay: 0.14, ease });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [siteReady]);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const fullscreenMotion = useMotionValue(0);
@@ -618,7 +657,7 @@ export default function Carousel() {
           alignItems: "center",
           justifyContent: "center",
           opacity: siteReady ? 0 : 1,
-          transition: "opacity 0.9s ease",
+          transition: "opacity 1.8s ease",
           pointerEvents: siteReady ? "none" : "all",
         }}
       >
@@ -628,7 +667,6 @@ export default function Carousel() {
             fontFamily: "'Bootzy', serif",
             fontSize: 32,
             fontWeight: "normal",
-            color: "#ffffff",
             letterSpacing: "0.32px",
             lineHeight: 1,
           }}
@@ -656,7 +694,9 @@ export default function Carousel() {
           naturally darken and dissolve its lower portion.
           Hidden during fullscreen — the reflection makes no sense once the
           video fills the whole viewport. */}
-      <StageReflection slide={activeSlide} zoom={effectiveZoom} config={reflectionConfig} visible={reflectionVisible && !isFullscreen} activeVideoRef={activeVideoRef} />
+      <motion.div style={{ opacity: introOpacity }} aria-hidden="true">
+        <StageReflection slide={activeSlide} zoom={effectiveZoom} config={reflectionConfig} visible={reflectionVisible && !isFullscreen} activeVideoRef={activeVideoRef} />
+      </motion.div>
 
       {/* Card rail — full-viewport, behind all UI chrome. */}
       <motion.div
@@ -694,6 +734,7 @@ export default function Carousel() {
             isVisuallyFullscreen={isVisuallyFullscreen}
             onEnterFullscreen={handleEnterFullscreen}
             onVideoReady={handleVideoReady}
+            introMotion={introMotion}
           />
         ))}
       </motion.div>
@@ -910,7 +951,7 @@ export default function Carousel() {
             exit="exit"
             style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}
           >
-            <h1
+            <motion.h1
               className="title-trimmed"
               style={{
                 fontFamily: "'Bootzy', serif",
@@ -919,12 +960,14 @@ export default function Carousel() {
                 color: "#f9f229",
                 lineHeight: 1.4,
                 margin: 0,
+                y: titleIntroY,
+                opacity: titleIntroOpacity,
               }}
             >
               {activeSlide.title}
-            </h1>
+            </motion.h1>
 
-            <div
+            <motion.div
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -934,6 +977,8 @@ export default function Carousel() {
                 fontSize: 16,
                 color: "#ffffff",
                 lineHeight: 1.5,
+                y: metaIntroY,
+                opacity: metaIntroOpacity,
               }}
             >
               {activeSlide.subtitle.split(" · ").map((part, i, arr) => (
@@ -942,7 +987,7 @@ export default function Carousel() {
                   {i < arr.length - 1 && <span key={`dot-${i}`}>·</span>}
                 </>
               ))}
-            </div>
+            </motion.div>
           </motion.div>
         </AnimatePresence>
       </div>

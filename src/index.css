@@ -51,14 +51,27 @@ button {
   cursor: grabbing;
 }
 
-/* Loading screen wordmark pulse */
-@keyframes wordmark-pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.35; }
+/* Loading screen wordmark — sweep then fade.
+   Phase 1 (0 → 55%): white fills from left to right across the text.
+   Phase 2 (55% → 68%): brief hold at full white.
+   Phase 3 (68% → 100%): entire wordmark fades to invisible.
+   Total: 2.5s — finishes well before the 3s minimum hold, so the black
+   overlay is all that remains when siteReady triggers its own fade-out. */
+@keyframes wordmark-sweep-fade {
+  0%   { background-position: 100% 0%; opacity: 1; }
+  55%  { background-position:   0% 0%; opacity: 1; }
+  68%  { background-position:   0% 0%; opacity: 1; }
+  100% { background-position:   0% 0%; opacity: 0; }
 }
 
 .loading-wordmark {
-  animation: wordmark-pulse 2s ease-in-out infinite;
+  background: linear-gradient(to right, #ffffff 50%, #3D3D3D 50%);
+  background-size: 200% 100%;
+  background-position: 100% 0%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: wordmark-sweep-fade 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 /* Mobile gate — shown only on small screens */

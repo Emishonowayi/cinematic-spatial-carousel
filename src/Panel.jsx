@@ -108,7 +108,7 @@ function Media({ slide, onLoad, shouldPlay, videoRef, onAspectKnown }) {
   );
 }
 
-export default function Panel({ offset, slide, tweakOverrides, lightingConfig, dragOffset, zoom = 1, isSettlingRef, activeVideoRef, activeSlideId, parallaxConfig = PARALLAX_DEFAULTS, fullscreenMotion, mediaScaleProgress, fullscreenScale = 2, isFullscreen, isVisuallyFullscreen, onEnterFullscreen, onVideoReady }) {
+export default function Panel({ offset, slide, tweakOverrides, lightingConfig, dragOffset, zoom = 1, isSettlingRef, activeVideoRef, activeSlideId, parallaxConfig = PARALLAX_DEFAULTS, fullscreenMotion, mediaScaleProgress, fullscreenScale = 2, isFullscreen, isVisuallyFullscreen, onEnterFullscreen, onVideoReady, introMotion }) {
   const [loaded, setLoaded] = useState(false);
   // Fire onVideoReady exactly once when the first canplay/load event arrives
   // for one of the 3 initially visible cards (|offset| <= 1).
@@ -227,6 +227,11 @@ export default function Panel({ offset, slide, tweakOverrides, lightingConfig, d
   const fullscreenScaleRef = useRef(fullscreenScale);
   fullscreenScaleRef.current = fullscreenScale;
 
+  // Stable fallback so introMotion is always a real MotionValue in the
+  // useTransform array below — avoids conditional hook issues.
+  const _zeroIntro = useMotionValue(0);
+  const effectiveIntroMotion = introMotion ?? _zeroIntro;
+
   // ── useTransform helpers ───────────────────────────────────────────────────
   // All motion values are derived from the single dragOffset value.
   //   dragOffset = 0  → neutral (current slot)
@@ -239,8 +244,8 @@ export default function Panel({ offset, slide, tweakOverrides, lightingConfig, d
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const xMotion = useTransform(
-    fullscreenMotion ? [dragOffset, fullscreenMotion] : [dragOffset],
-    ([v, fs = 0]) => {
+    [dragOffset, fullscreenMotion, effectiveIntroMotion],
+    ([v, fs = 0, intro = 0]) => {
       const { stateNeutral: sN, stateForward: sF, stateBackward: sB } = stateRef.current;
       const n = xVwNum(sN), f = xVwNum(sF), b = xVwNum(sB);
       const result = v >= 0 ? lerp(n, f, v) : lerp(b, n, v + 1);
@@ -250,6 +255,13 @@ export default function Panel({ offset, slide, tweakOverrides, lightingConfig, d
       if (fs > 0 && offset !== 0) {
         // 150vw push from each side card — clears even very wide viewports.
         xPx += Math.sign(offset) * 150 * VW_TO_PX * fs;
+      }
+      // Entrance animation: ±1 cards slide in from off-screen. intro = 1 at
+      // page load, springs to 0 once siteReady fires. 800px extra in the
+      // pre-zoom coordinate space ensures the card is fully beyond the viewport
+      // edge regardless of screen width before the spring releases them.
+      if (intro > 0 && Math.abs(offset) === 1) {
+        xPx += Math.sign(offset) * 150 * intro;
       }
       return `${xPx.toFixed(3)}px`;
     }
@@ -379,13 +391,17 @@ export default function Panel({ offset, slide, tweakOverrides, lightingConfig, d
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const opacityMotion = useTransform(
-    fullscreenMotion ? [dragOffset, fullscreenMotion] : [dragOffset],
-    ([v, fs = 0]) => {
+    [dragOffset, fullscreenMotion, effectiveIntroMotion],
+    ([v, fs = 0, intro = 0]) => {
       const { stateNeutral: sN, stateForward: sF, stateBackward: sB } = stateRef.current;
       const base = v >= 0 ? lerp(sN.opacity, sF.opacity, v) : lerp(sB.opacity, sN.opacity, v + 1);
       // Fullscreen: side cards fade to 0 as they're pushed out. Centre stays.
       if (fs > 0 && offset !== 0) {
         return base * (1 - fs);
+      }
+      // Intro fade-in: centre card eases from 0 to its resting opacity.
+      if (intro > 0 && offset === 0) {
+        return base * (1 - intro);
       }
       return base;
     }
