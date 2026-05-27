@@ -598,19 +598,9 @@ export default function Carousel() {
           fontSize: 16,
           color: "#ffffff",
           lineHeight: 1.5,
-          whiteSpace: "nowrap",
+          textAlign: "center",
         }}>
-          Mobile support is coming soon
-        </span>
-        <span style={{
-          fontFamily: "'NeueMontreal', sans-serif",
-          fontWeight: 500,
-          fontSize: 16,
-          color: "#ffffff",
-          lineHeight: 1.5,
-          whiteSpace: "nowrap",
-        }}>
-          Please view on desktop.
+          Mobile support is coming soon<br />Please view on desktop.
         </span>
       </div>
 
