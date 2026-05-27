@@ -23,5 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 
+# Large media files — served from Cloudinary in production
+public/*.mp4
+public/*.mov
+public/*.webm
+
 # Claude Code local config
 .claude/

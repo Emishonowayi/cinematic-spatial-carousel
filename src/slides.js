@@ -7,7 +7,7 @@ export const SLIDES = [
     title: "Joys of Fatherhood",
     subtitle: "Campaign · 2021",
     type: "video",
-    src: "/10452536-hd_3840_2160_24fps.mp4",
+    src: "https://res.cloudinary.com/ddwy6x2zr/video/upload/v1779844997/10452536-hd_3840_2160_24fps_ixiviw.mp4",
     poster: undefined,
   },
   {
@@ -15,7 +15,7 @@ export const SLIDES = [
     title: "Quiet Hours",
     subtitle: "Short Film · 2022",
     type: "video",
-    src: "/10548173-uhd_4096_2160_25fps.mp4",
+    src: "https://res.cloudinary.com/ddwy6x2zr/video/upload/v1779844986/10548173-uhd_4096_2160_25fps_cyookx.mp4",
     poster: undefined,
   },
   {
@@ -23,7 +23,7 @@ export const SLIDES = [
     title: "Urban Echoes",
     subtitle: "Documentary · 2022",
     type: "video",
-    src: "/2022396-hd_1920_1080_30fps.mp4",
+    src: "https://res.cloudinary.com/ddwy6x2zr/video/upload/v1779845056/2022396-hd_1920_1080_30fps_opiakb.mp4",
     poster: undefined,
   },
   {
@@ -31,7 +31,7 @@ export const SLIDES = [
     title: "Still Water",
     subtitle: "Campaign · 2023",
     type: "video",
-    src: "/6250115-uhd_3840_2160_25fps.mp4",
+    src: "https://res.cloudinary.com/ddwy6x2zr/video/upload/v1779844950/6250115-uhd_3840_2160_25fps_cciilt.mp4",
     poster: undefined,
   },
   {
@@ -39,7 +39,7 @@ export const SLIDES = [
     title: "The Last Light",
     subtitle: "Feature · 2023",
     type: "video",
-    src: "/8692542-uhd_4096_2160_24fps.mp4",
+    src: "https://res.cloudinary.com/ddwy6x2zr/video/upload/v1779844992/8692542-uhd_4096_2160_24fps_sqh72l.mp4",
     poster: undefined,
   },
   {
@@ -47,7 +47,7 @@ export const SLIDES = [
     title: "Open Water",
     subtitle: "Documentary · 2024",
     type: "video",
-    src: "/9904188-uhd_4096_2160_25fps.mp4",
+    src: "https://res.cloudinary.com/ddwy6x2zr/video/upload/v1779844965/9904188-uhd_4096_2160_25fps_ib6xag.mp4",
     poster: undefined,
   },
 ];
