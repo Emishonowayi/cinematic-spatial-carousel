@@ -11,6 +11,10 @@ export const REFLECTION_DEFAULTS = {
   gradientStart: 20,   // % from top where darkening begins
   gradientEnd:   80,   // % from top where full darkness is reached
   gradientDark:  1.00, // peak black opacity at darkest point
+  fadeOutMs:     400,  // ms — how fast reflection disappears on nav
+  fadeInMs:      900,  // ms — how fast reflection reappears after nav
+  restoreMs:     850,  // ms — delay before reflection fades back in (button/key nav)
+  restoreDragMs: 450,  // ms — same delay but for drag nav
 };
 
 // Canvas mirror of the centre Panel's <video>. Every animation frame we copy
@@ -124,6 +128,7 @@ export default function StageReflection({ slide, zoom = 1, config = REFLECTION_D
     blur, opacity,
     skew, offsetY,
     gradientStart, gradientEnd, gradientDark,
+    fadeOutMs = 700, fadeInMs = 900,
   } = config;
 
   // displaySlide only updates when visible flips back to true.
@@ -185,7 +190,7 @@ export default function StageReflection({ slide, zoom = 1, config = REFLECTION_D
         // effectiveVisible (not visible) gates the fade-in on the new media
         // being ready, so the reflection never appears showing stale frames.
         opacity: effectiveVisible ? 1 : 0,
-        transition: effectiveVisible ? "opacity 0.9s ease" : "opacity 0.7s ease",
+        transition: effectiveVisible ? `opacity ${fadeInMs}ms ease` : `opacity ${fadeOutMs}ms ease`,
       }}
     >
       <div

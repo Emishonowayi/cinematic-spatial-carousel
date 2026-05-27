@@ -337,13 +337,12 @@ export default function Carousel() {
       }
     }, 400);
 
-    // Reflection fades back in at 850ms — just before the spring fully
-    // settles (~1s), so it drifts in as the card arrives rather than
-    // popping in after the fact.
+    // Reflection fades back in after restoreMs — just before the spring fully
+    // settles, so it drifts in as the card arrives rather than popping in.
     reflectionTimerRef.current = setTimeout(() => {
       reflectionTimerRef.current = null;
       if (!entry.cancelled) setReflectionVisible(true);
-    }, 850);
+    }, reflectionConfig.restoreMs ?? 850);
 
     // Early-settle: as soon as the card is visually at its destination (within
     // 5% of the target), unlock input immediately. Critically, we do NOT stop
@@ -502,13 +501,12 @@ export default function Carousel() {
       // Title updates immediately on release — the user already decided to
       // navigate, so the crossfade should start the moment they let go.
       setTitleIndex((prev) => getWrappedIndex(prev + dir, SLIDES.length));
-      // Fade the reflection back in when the drag spring is nearly settled
-      // (~600ms total). 450ms gives the card time to land before the floor
-      // reflection drifts back in.
+      // Fade the reflection back in after restoreDragMs once the drag spring
+      // is nearly settled and the new card has landed.
       reflectionTimerRef.current = setTimeout(() => {
         reflectionTimerRef.current = null;
         setReflectionVisible(true);
-      }, 450);
+      }, reflectionConfig.restoreDragMs ?? 450);
 
       const entry = {
         controls: null, cancelled: false, titleTimer: null, earlySettleUnsub: null,
