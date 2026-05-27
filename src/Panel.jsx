@@ -1,5 +1,5 @@
-import { useRef, useState, useEffect, useLayoutEffect } from "react";
-import { motion, useTransform, useReducedMotion, useMotionValueEvent } from "framer-motion";
+import { useRef, useState, useEffect, useLayoutEffect, useMemo } from "react";
+import { motion, useTransform, useReducedMotion, useMotionValueEvent, useMotionValue } from "framer-motion";
 import { PANEL_STATES, getStateKey, VW_TO_PX } from "./panelStates";
 import CardLighting from "./CardLighting";
 
@@ -13,7 +13,7 @@ const PANEL_H = 405;
 //               never reveals empty edges. Must satisfy
 //               PANEL_W * (scale - 1) / 2 ≥ parallaxPx, with a little slack.
 export const PARALLAX_DEFAULTS = {
-  parallaxPx: 150,
+  parallaxPx: 190,
   scale:      1.40,
   curve:      "sin",  // "sin" → piecewise-sin curve, lag eases back to 0 at
                       //         endpoints (no snap). Uses `peak`.
@@ -47,7 +47,7 @@ function applyOverrides(state, stateKey, overrides) {
 // Extract the numeric vw value from an "Nvw" string
 const xVwNum = (state) => parseFloat(state.x);
 
-function Media({ slide, onLoad, shouldPlay, videoRef }) {
+function Media({ slide, onLoad, shouldPlay, videoRef, onAspectKnown }) {
   // Drive play/pause from the shouldPlay prop. We deliberately do NOT set the
   // autoPlay attribute — controlling playback via the ref is the single source
   // of truth and avoids a brief "autoplay then pause" flash for side cards.
@@ -65,6 +65,23 @@ function Media({ slide, onLoad, shouldPlay, videoRef }) {
     }
   }, [shouldPlay, slide.type, slide.src]);
 
+  // objectFit is ALWAYS "cover". For fullscreen, we don't switch fit — instead
+  // the Panel's scaleX and scaleY adjust so the panel itself takes on the
+  // video's natural aspect ratio. Cover then fills the panel exactly with no
+  // crop, no snap, and a smooth interpolation as the panel reshapes.
+  const handleVideoMetadata = (e) => {
+    const v = e.currentTarget;
+    if (v && v.videoWidth && v.videoHeight && onAspectKnown) {
+      onAspectKnown(v.videoWidth / v.videoHeight);
+    }
+  };
+  const handleImgLoad = (e) => {
+    if (onLoad) onLoad(e);
+    const img = e.currentTarget;
+    if (img && img.naturalWidth && img.naturalHeight && onAspectKnown) {
+      onAspectKnown(img.naturalWidth / img.naturalHeight);
+    }
+  };
   if (slide.type === "video") {
     return (
       <video
@@ -76,6 +93,7 @@ function Media({ slide, onLoad, shouldPlay, videoRef }) {
         playsInline
         preload="auto"
         onCanPlay={onLoad}
+        onLoadedMetadata={handleVideoMetadata}
         style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
       />
     );
@@ -84,19 +102,30 @@ function Media({ slide, onLoad, shouldPlay, videoRef }) {
     <img
       src={slide.src}
       alt={slide.title}
-      onLoad={onLoad}
+      onLoad={handleImgLoad}
       style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
     />
   );
 }
 
-export default function Panel({ offset, slide, tweakOverrides, lightingConfig, dragOffset, zoom = 1, isSettlingRef, activeVideoRef, activeSlideId, parallaxConfig = PARALLAX_DEFAULTS }) {
+export default function Panel({ offset, slide, tweakOverrides, lightingConfig, dragOffset, zoom = 1, isSettlingRef, activeVideoRef, activeSlideId, parallaxConfig = PARALLAX_DEFAULTS, fullscreenMotion, mediaScaleProgress, fullscreenScale = 2, isFullscreen, isVisuallyFullscreen, onEnterFullscreen }) {
   const [loaded, setLoaded] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const panelRef = useRef(null);
   const videoRef = useRef(null);
   const prefersReduced = useReducedMotion();
   const isCenter = offset === 0;
+
+  // The media's natural aspect ratio (videoWidth / videoHeight, or
+  // naturalWidth / naturalHeight for images). Drives non-uniform fullscreen
+  // scaling so the panel's aspect becomes the video's, eliminating the need
+  // to switch objectFit and removing the snap that produced when contain →
+  // cover flipped at the end of the exit transition.
+  // Defaults to the panel's own aspect (uniform scaling) until we learn the
+  // real value from onLoadedMetadata.
+  const [mediaAspect, setMediaAspect] = useState(PANEL_W / PANEL_H);
+  const mediaAspectRef = useRef(mediaAspect);
+  mediaAspectRef.current = mediaAspect;
 
   // Claim activeVideoRef whenever this Panel's slide matches the active slide
   // (driven by titleIndex, which changes at 400ms — long before activeIndex /
@@ -181,10 +210,19 @@ export default function Panel({ offset, slide, tweakOverrides, lightingConfig, d
   // Formula: max(0, 1 − |dragOffset − offset|) — works for offsets ±1 and 0;
   // for |offset| ≥ 2, the card is never near centre so this is always 0.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const overlayOpacity = useTransform(dragOffset, (v) => {
-    const centerness = Math.max(0, 1 - Math.abs(v - offset));
-    return centerness * stateRef.current.overlayDarkness;
-  });
+  const overlayOpacity = useTransform(
+    fullscreenMotion ? [dragOffset, fullscreenMotion] : [dragOffset],
+    ([v, fs = 0]) => {
+      const centerness = Math.max(0, 1 - Math.abs(v - offset));
+      // In fullscreen the centre card should not be dimmed — video plays clean.
+      return centerness * stateRef.current.overlayDarkness * (1 - fs);
+    }
+  );
+
+  // Stable ref to fullscreenScale so useTransform reads the latest value
+  // without needing to be recreated on each render.
+  const fullscreenScaleRef = useRef(fullscreenScale);
+  fullscreenScaleRef.current = fullscreenScale;
 
   // ── useTransform helpers ───────────────────────────────────────────────────
   // All motion values are derived from the single dragOffset value.
@@ -197,15 +235,22 @@ export default function Panel({ offset, slide, tweakOverrides, lightingConfig, d
   // motion values.
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const xMotion = useTransform(dragOffset, (v) => {
-    const { stateNeutral: sN, stateForward: sF, stateBackward: sB } = stateRef.current;
-    const n = xVwNum(sN), f = xVwNum(sF), b = xVwNum(sB);
-    const result = v >= 0 ? lerp(n, f, v) : lerp(b, n, v + 1);
-    // Convert the design-vw value to absolute px against REF_WIDTH so the
-    // card composition is preserved on any viewport. The parent container's
-    // effectiveZoom (carouselZoom × fitScale) then scales these px proportionally.
-    return `${(result * VW_TO_PX).toFixed(3)}px`;
-  });
+  const xMotion = useTransform(
+    fullscreenMotion ? [dragOffset, fullscreenMotion] : [dragOffset],
+    ([v, fs = 0]) => {
+      const { stateNeutral: sN, stateForward: sF, stateBackward: sB } = stateRef.current;
+      const n = xVwNum(sN), f = xVwNum(sF), b = xVwNum(sB);
+      const result = v >= 0 ? lerp(n, f, v) : lerp(b, n, v + 1);
+      let xPx = result * VW_TO_PX;
+      // Fullscreen contribution: side cards push further outward (off-screen)
+      // proportional to fs. Centre (offset === 0) gets no push.
+      if (fs > 0 && offset !== 0) {
+        // 150vw push from each side card — clears even very wide viewports.
+        xPx += Math.sign(offset) * 150 * VW_TO_PX * fs;
+      }
+      return `${xPx.toFixed(3)}px`;
+    }
+  );
 
   // Parallax: media drifts in the OPPOSITE direction of the frame's motion.
   // Piecewise-sin curve so the lag PEAKS at v = ±peak (configurable) and
@@ -239,6 +284,37 @@ export default function Panel({ offset, slide, tweakOverrides, lightingConfig, d
     return sign * Math.sin(t * Math.PI / 2) * parallaxPx;
   });
 
+  // Media element CSS dimensions — locked to the media's natural aspect at
+  // COVER size. The video overshoots the mask in whichever dimension is
+  // necessary to maintain its aspect while filling the mask in the other.
+  // This gives the cover/cropped carousel look AND room for parallax drift.
+  //   vAR > pAR (wider media): height matches mask, width overshoots
+  //   vAR < pAR (taller media): width matches mask, height overshoots
+  const mediaDims = useMemo(() => {
+    const vAR = mediaAspect;
+    const pAR = PANEL_W / PANEL_H;
+    if (vAR > pAR) {
+      return { width: PANEL_H * vAR, height: PANEL_H };
+    }
+    return { width: PANEL_W, height: PANEL_W / vAR };
+  }, [mediaAspect]);
+
+  // The wrapper scale needed in fullscreen to shrink the cover-sized media
+  // back to "contain" — i.e. fit within the mask at natural aspect with
+  // letterbox/pillarbox. This is the aspect mismatch ratio.
+  //   16:9 (1.778) in 1.679 mask → 0.944 (slight horizontal shrink)
+  //   4:3  (1.333) in 1.679 mask → 0.794 (slight vertical shrink)
+  const fullscreenWrapperTarget = useMemo(() => {
+    const vAR = mediaAspect;
+    const pAR = PANEL_W / PANEL_H;
+    return vAR > pAR ? pAR / vAR : vAR / pAR;
+  }, [mediaAspect]);
+  const fullscreenWrapperTargetRef = useRef(fullscreenWrapperTarget);
+  fullscreenWrapperTargetRef.current = fullscreenWrapperTarget;
+
+  // mediaWrapperScale is defined AFTER scaleMotion below — it depends on
+  // both scaleMotion (mask) and mediaScaleProgress (independent media size).
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const rotateYMotion = useTransform(dragOffset, (v) => {
     const { stateNeutral: sN, stateForward: sF, stateBackward: sB } = stateRef.current;
@@ -246,16 +322,71 @@ export default function Panel({ offset, slide, tweakOverrides, lightingConfig, d
   });
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const scaleMotion = useTransform(dragOffset, (v) => {
-    const { stateNeutral: sN, stateForward: sF, stateBackward: sB } = stateRef.current;
-    return v >= 0 ? lerp(sN.scale, sF.scale, v) : lerp(sB.scale, sN.scale, v + 1);
-  });
+  // Uniform panel scale — same in carousel and fullscreen. The mask itself
+  // doesn't change aspect; the media element inside handles aspect via its
+  // own motion-value-driven dimensions (see videoWidth / videoHeight below).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const scaleMotion = useTransform(
+    fullscreenMotion ? [dragOffset, fullscreenMotion] : [dragOffset],
+    ([v, fs = 0]) => {
+      const { stateNeutral: sN, stateForward: sF, stateBackward: sB } = stateRef.current;
+      const base = v >= 0 ? lerp(sN.scale, sF.scale, v) : lerp(sB.scale, sN.scale, v + 1);
+      if (fs > 0 && offset === 0) {
+        return lerp(base, fullscreenScaleRef.current, fs);
+      }
+      return base;
+    }
+  );
+  const labelCounterScale = useTransform(scaleMotion, (s) => 1 / s);
+
+  // Parallax wrapper scale — designed so the MEDIA's visual size is governed
+  // by mediaScaleProgress (slow spring) INDEPENDENTLY of the mask's panel
+  // scaleMotion (fast spring).
+  //
+  // Math:
+  //   video visual size = mediaCSS × wrapper × scaleMotion × effectiveZoom
+  //   we want that to equal mediaCSS × someFactor × effectiveZoom
+  //   so:    wrapper = someFactor / scaleMotion
+  //
+  // someFactor interpolates from parallaxConfig.scale (carousel cover with
+  // parallax overshoot) to fullscreenScale × aspectRatio (fullscreen contain,
+  // video width matches mask width) via mediaScaleProgress.
+  //
+  // Result: mask grows ahead of media on entry (no late "shrink in height"),
+  // and mask shrinks ahead of media on exit (cover crop re-established
+  // immediately, no late "stretch up").
+  //
+  // Non-centre cards: just use the static parallaxConfig.scale — they don't
+  // participate in the fullscreen transition.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const mediaWrapperScale = useTransform(
+    mediaScaleProgress ? [scaleMotion, mediaScaleProgress] : [scaleMotion],
+    ([s, p = 0]) => {
+      const carouselFactor = parallaxRef.current.scale;
+      if (offset !== 0) return carouselFactor;
+      const fullscreenFactor = fullscreenScaleRef.current * fullscreenWrapperTargetRef.current;
+      const someFactor = lerp(carouselFactor, fullscreenFactor, mediaScaleProgress ? p : 0);
+      return s === 0 ? carouselFactor : someFactor / s;
+    }
+  );
+
+  // Aspect-locked sizer scale stays at 1 — all the cover→contain math is
+  // handled by mediaWrapperScale above. The sizer just provides centered
+  // positioning at the cover-sized CSS dimensions.
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const opacityMotion = useTransform(dragOffset, (v) => {
-    const { stateNeutral: sN, stateForward: sF, stateBackward: sB } = stateRef.current;
-    return v >= 0 ? lerp(sN.opacity, sF.opacity, v) : lerp(sB.opacity, sN.opacity, v + 1);
-  });
+  const opacityMotion = useTransform(
+    fullscreenMotion ? [dragOffset, fullscreenMotion] : [dragOffset],
+    ([v, fs = 0]) => {
+      const { stateNeutral: sN, stateForward: sF, stateBackward: sB } = stateRef.current;
+      const base = v >= 0 ? lerp(sN.opacity, sF.opacity, v) : lerp(sB.opacity, sN.opacity, v + 1);
+      // Fullscreen: side cards fade to 0 as they're pushed out. Centre stays.
+      if (fs > 0 && offset !== 0) {
+        return base * (1 - fs);
+      }
+      return base;
+    }
+  );
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const filterMotion = useTransform(dragOffset, (v) => {
@@ -283,6 +414,7 @@ export default function Panel({ offset, slide, tweakOverrides, lightingConfig, d
   if (prefersReduced) {
     return (
       <motion.div
+        data-panel-offset={offset}
         animate={{
           x: stateNeutral.x,
           rotateY: stateNeutral.rotateY,
@@ -321,6 +453,7 @@ export default function Panel({ offset, slide, tweakOverrides, lightingConfig, d
   return (
     <motion.div
       ref={panelRef}
+      data-panel-offset={offset}
       onMouseEnter={() => isCenterZone && setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{
@@ -333,9 +466,11 @@ export default function Panel({ offset, slide, tweakOverrides, lightingConfig, d
         marginTop: -PANEL_H / 2,
         transformStyle: "preserve-3d",
         willChange: "transform, opacity, filter",
-        pointerEvents: isCenterZone ? "auto" : "none",
+        // Disable pointer events while fullscreen so the exit overlay catches
+        // clicks — otherwise the centre card would consume them.
+        pointerEvents: isCenterZone && !isFullscreen ? "auto" : "none",
         userSelect: "none",
-        cursor: isCenterZone ? "pointer" : "default",
+        cursor: isCenterZone && !isFullscreen ? "pointer" : "default",
         x: xMotion,
         rotateY: rotateYMotion,
         originX: originXMotion,
@@ -345,7 +480,9 @@ export default function Panel({ offset, slide, tweakOverrides, lightingConfig, d
         zIndex: zIndexMotion,
       }}
     >
-      {/* Ambient glow behind active panel */}
+      {/* Ambient glow behind active panel — kept mounted on the centre card
+          so the opacity transition runs smoothly when exiting fullscreen.
+          (Conditional unmount would skip the transition on remount.) */}
       {isCenterZone && (
         <div
           style={{
@@ -356,6 +493,8 @@ export default function Panel({ offset, slide, tweakOverrides, lightingConfig, d
               "radial-gradient(ellipse at center, rgba(255,255,255,0.07) 0%, transparent 65%)",
             pointerEvents: "none",
             zIndex: -1,
+            opacity: isVisuallyFullscreen ? 0 : 1,
+            transition: "opacity 0.45s ease",
           }}
         />
       )}
@@ -379,7 +518,7 @@ export default function Panel({ offset, slide, tweakOverrides, lightingConfig, d
             position: "absolute",
             inset: 0,
             x: mediaParallaxX,
-            scale: parallaxConfig.scale,
+            scale: mediaWrapperScale,
             transformOrigin: "center center",
           }}
         >
@@ -391,10 +530,26 @@ export default function Panel({ offset, slide, tweakOverrides, lightingConfig, d
               transition: "opacity 0.7s ease",
             }}
           >
-            {/* Play only the 3 cards in the active viewing zone (centre + immediate
-                left/right). |offset| <= 1 covers LEFT_NEAR / CENTER / RIGHT_NEAR;
-                the FAR / HIDDEN slots stay paused to save CPU/battery. */}
-            <Media slide={slide} onLoad={() => setLoaded(true)} shouldPlay={Math.abs(offset) <= 1} videoRef={videoRef} />
+            {/* Aspect-locked sizer — centered within parallax wrapper. Its
+                CSS width / height are motion values that interpolate between
+                cover dims (overshoots panel) and contain dims (fits within
+                panel) so the media's natural aspect is preserved at every
+                point of the fullscreen transition. No objectFit switching. */}
+            <div
+              style={{
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                width: mediaDims.width,
+                height: mediaDims.height,
+              }}
+            >
+              {/* Play only the 3 cards in the active viewing zone (centre + immediate
+                  left/right). |offset| <= 1 covers LEFT_NEAR / CENTER / RIGHT_NEAR;
+                  the FAR / HIDDEN slots stay paused to save CPU/battery. */}
+              <Media slide={slide} onLoad={() => setLoaded(true)} shouldPlay={Math.abs(offset) <= 1} videoRef={videoRef} onAspectKnown={setMediaAspect} />
+            </div>
           </div>
         </motion.div>
       </div>
@@ -416,10 +571,12 @@ export default function Panel({ offset, slide, tweakOverrides, lightingConfig, d
 
       {/* Interactive lighting (surface glow + rim) — centre card only.
           The darkening overlay is handled above, so no harsh pop on mount. */}
-      {isCenterZone && <CardLighting width={PANEL_W} height={PANEL_H} config={lightingConfig} />}
+      {isCenterZone && !isVisuallyFullscreen && <CardLighting width={PANEL_W} height={PANEL_H} config={lightingConfig} />}
 
-      {/* Hover overlay — extra darkening layer on centre card only.
-          CSS transition so it fades in/out without any motion value overhead. */}
+      {/* Hover overlay — extra darkening layer on centre card only. Stays
+          mounted while the card is in the centre zone so its opacity
+          transition runs on fullscreen-exit instead of mounting at target
+          opacity. */}
       {isCenterZone && (
         <div
           style={{
@@ -427,8 +584,8 @@ export default function Panel({ offset, slide, tweakOverrides, lightingConfig, d
             top: 0, left: 0,
             width: PANEL_W, height: PANEL_H,
             background: "rgb(0,0,0)",
-            opacity: isHovered ? (lightingConfig?.hoverOverlay ?? 0.25) : 0,
-            transition: "opacity 0.35s ease",
+            opacity: isVisuallyFullscreen ? 0 : (isHovered ? (lightingConfig?.hoverOverlay ?? 0.25) : 0),
+            transition: "opacity 0.55s cubic-bezier(0.4, 0, 0.2, 1)",
             pointerEvents: "none",
             zIndex: 4,
           }}
@@ -442,7 +599,7 @@ export default function Panel({ offset, slide, tweakOverrides, lightingConfig, d
           Counter-scale (1/zoom) keeps the text the same apparent size as
           the Prev/Next labels that live outside the scaled container. */}
       {isCenterZone && (
-        <div
+        <motion.div
           style={{
             position: "absolute",
             top: 0, left: 0,
@@ -450,10 +607,17 @@ export default function Panel({ offset, slide, tweakOverrides, lightingConfig, d
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            opacity: isHovered ? 1 : 0,
-            transition: "opacity 0.30s ease",
+            opacity: isVisuallyFullscreen ? 0 : (isHovered ? 1 : 0),
+            // Smooth ease for the hover-in/out feel. No need to speed up for
+            // fullscreen entry — the counter-scale below keeps the label at a
+            // constant visual size, so it just fades out in place.
+            transition: "opacity 0.55s cubic-bezier(0.4, 0, 0.2, 1)",
             pointerEvents: "none",
             zIndex: 5,
+            // Counter-scale neutralises the panel's growth so the label
+            // doesn't visually expand into fullscreen — just fades out
+            // in place at constant visual size.
+            scale: labelCounterScale,
           }}
         >
           <span
@@ -469,7 +633,7 @@ export default function Panel({ offset, slide, tweakOverrides, lightingConfig, d
           >
             Play Video
           </span>
-        </div>
+        </motion.div>
       )}
 
     </motion.div>

@@ -235,6 +235,97 @@ const PARALLAX_FIELDS = [
   ["scale",      "zoom",   1,    2.0,  0.01, "must exceed 1 + 2·drift/680"],
 ];
 
+function SpeedSlider({ label, hint, value, onChange, min = 0.3, max = 2.5, step = 0.05, color = "#7ddfff" }) {
+  return (
+    <div style={{ marginBottom: 7 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+        <span style={{ color: "#888", fontSize: 10 }}>{label}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ color: "#555", fontSize: 9 }}>{hint}</span>
+          <input
+            type="number"
+            value={value.toFixed(2)}
+            min={min} max={max} step={step}
+            onChange={(e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) onChange(Math.min(max, Math.max(min, v))); }}
+            style={{
+              width: 50, background: "rgba(255,255,255,0.07)", border: "none",
+              borderRadius: 3, color: "#fff", fontSize: 10, textAlign: "right",
+              padding: "1px 5px", outline: "none", fontFamily: "inherit",
+            }}
+          />
+        </div>
+      </div>
+      <input
+        type="range" min={min} max={max} step={step}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        style={{ width: "100%", accentColor: color, cursor: "pointer" }}
+      />
+    </div>
+  );
+}
+
+function TransitionsSection({ fullscreenSpeed, onFullscreenSpeedChange, mediaSpeed, onMediaSpeedChange, navSpeed, onNavSpeedChange }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const handleResetAll = () => {
+    onFullscreenSpeedChange(1.0);
+    if (onMediaSpeedChange) onMediaSpeedChange(1.0);
+    onNavSpeedChange(1.0);
+  };
+
+  return (
+    <div style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+      <div
+        onClick={() => setCollapsed((c) => !c)}
+        style={{
+          display: "flex", alignItems: "center", gap: 7,
+          padding: "7px 14px", cursor: "pointer",
+          background: collapsed ? "transparent" : "rgba(255,255,255,0.03)",
+        }}
+      >
+        <span style={{ width: 8, height: 8, borderRadius: 2, background: "#7ddfff", flexShrink: 0 }} />
+        <span style={{ fontWeight: 700, letterSpacing: "0.04em", color: "#fff", fontSize: 10.5 }}>TRANSITIONS</span>
+        <span style={{ color: "#555", fontSize: 9, marginLeft: 4 }}>nav + fullscreen</span>
+        <button
+          onClick={(e) => { e.stopPropagation(); handleResetAll(); }}
+          style={{ ...btnStyle, marginLeft: "auto", padding: "2px 6px", fontSize: 9 }}
+          title="reset both speeds"
+        >
+          reset
+        </button>
+        <span style={{ color: "#555", fontSize: 10 }}>{collapsed ? "▸" : "▾"}</span>
+      </div>
+
+      {!collapsed && (
+        <div style={{ padding: "4px 14px 10px" }}>
+          <SpeedSlider
+            label="nav speed"
+            hint="next/prev — lower = slower"
+            value={navSpeed ?? 1.0}
+            onChange={onNavSpeedChange}
+          />
+          <SpeedSlider
+            label="mask speed"
+            hint="fullscreen panel scale"
+            value={fullscreenSpeed ?? 1.0}
+            onChange={onFullscreenSpeedChange}
+          />
+          <SpeedSlider
+            label="media speed"
+            hint="video inside mask — independent"
+            value={mediaSpeed ?? 1.0}
+            onChange={onMediaSpeedChange ?? (() => {})}
+            min={0.02}
+            max={2.5}
+            step={0.01}
+            color="#ffb347"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ParallaxSection({ config, onChange }) {
   const [collapsed, setCollapsed] = useState(false);
   const set = (key, val) => onChange((prev) => ({ ...prev, [key]: val }));
@@ -543,7 +634,7 @@ function ReflectionSection({ config, onChange }) {
   );
 }
 
-export default function TweakPanel({ overrides, onChange, zoom, onZoomChange, edgeVignette, onEdgeVignetteChange, lightingConfig, onLightingChange, reflectionConfig, onReflectionChange, parallaxConfig, onParallaxChange }) {
+export default function TweakPanel({ overrides, onChange, zoom, onZoomChange, edgeVignette, onEdgeVignetteChange, lightingConfig, onLightingChange, reflectionConfig, onReflectionChange, parallaxConfig, onParallaxChange, fullscreenSpeed, onFullscreenSpeedChange, mediaSpeed, onMediaSpeedChange, navSpeed, onNavSpeedChange }) {
   const [copied, setCopied] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [hidden, setHidden] = useState(false);
@@ -596,6 +687,9 @@ export default function TweakPanel({ overrides, onChange, zoom, onZoomChange, ed
     onLightingChange(LIGHTING_DEFAULTS);
     onReflectionChange(REFLECTION_DEFAULTS);
     onParallaxChange(PARALLAX_DEFAULTS);
+    if (onFullscreenSpeedChange) onFullscreenSpeedChange(1.70);
+    if (onMediaSpeedChange) onMediaSpeedChange(0.60);
+    if (onNavSpeedChange) onNavSpeedChange(0.30);
   };
 
   const handleCopy = () => {
@@ -772,6 +866,18 @@ export default function TweakPanel({ overrides, onChange, zoom, onZoomChange, ed
           {/* Parallax */}
           {parallaxConfig && (
             <ParallaxSection config={parallaxConfig} onChange={onParallaxChange} />
+          )}
+
+          {/* Fullscreen transition speed */}
+          {(onFullscreenSpeedChange || onNavSpeedChange) && (
+            <TransitionsSection
+              fullscreenSpeed={fullscreenSpeed}
+              onFullscreenSpeedChange={onFullscreenSpeedChange}
+              mediaSpeed={mediaSpeed}
+              onMediaSpeedChange={onMediaSpeedChange}
+              navSpeed={navSpeed}
+              onNavSpeedChange={onNavSpeedChange}
+            />
           )}
 
           {/* Action bar */}
