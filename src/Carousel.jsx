@@ -148,6 +148,19 @@ export default function Carousel() {
   // Clicking the centre card zooms the video to fill the viewport, pushes
   // the side cards off-screen, fades out all chrome, and unmutes the video.
   // Clicking anywhere reverses everything.
+  // Loading gate — show overlay until the 3 initially visible videos are ready.
+  // readyCount increments each time a Panel reports its first canplay event.
+  // Falls back after 8s so a slow connection never stays stuck.
+  const [readyCount, setReadyCount] = useState(0);
+  const siteReady = readyCount >= 3;
+  const handleVideoReady = useCallback(() => {
+    setReadyCount((n) => Math.min(n + 1, 3));
+  }, []);
+  useEffect(() => {
+    const t = setTimeout(() => setReadyCount(3), 8000);
+    return () => clearTimeout(t);
+  }, []);
+
   const [isFullscreen, setIsFullscreen] = useState(false);
   const fullscreenMotion = useMotionValue(0);
   // Companion motion value running on a slower spring, used to drive the
@@ -590,6 +603,37 @@ export default function Carousel() {
         flexDirection: "column",
       }}
     >
+      {/* Loading overlay — fades out once the 3 visible videos are ready.
+          Stays mounted but pointer-events:none after fade so it never blocks. */}
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 99998,
+          background: "#000",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          opacity: siteReady ? 0 : 1,
+          transition: "opacity 0.9s ease",
+          pointerEvents: siteReady ? "none" : "all",
+        }}
+      >
+        <span
+          className="loading-wordmark"
+          style={{
+            fontFamily: "'Bootzy', serif",
+            fontSize: 32,
+            fontWeight: "normal",
+            color: "#ffffff",
+            letterSpacing: "0.32px",
+            lineHeight: 1,
+          }}
+        >
+          studio.seven
+        </span>
+      </div>
+
       {/* Mobile gate — CSS-driven, no JS. Sits above everything on small screens. */}
       <div className="mobile-gate">
         <span style={{
@@ -646,6 +690,7 @@ export default function Carousel() {
             isFullscreen={isFullscreen}
             isVisuallyFullscreen={isVisuallyFullscreen}
             onEnterFullscreen={handleEnterFullscreen}
+            onVideoReady={handleVideoReady}
           />
         ))}
       </motion.div>

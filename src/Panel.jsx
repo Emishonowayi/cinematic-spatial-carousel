@@ -108,8 +108,11 @@ function Media({ slide, onLoad, shouldPlay, videoRef, onAspectKnown }) {
   );
 }
 
-export default function Panel({ offset, slide, tweakOverrides, lightingConfig, dragOffset, zoom = 1, isSettlingRef, activeVideoRef, activeSlideId, parallaxConfig = PARALLAX_DEFAULTS, fullscreenMotion, mediaScaleProgress, fullscreenScale = 2, isFullscreen, isVisuallyFullscreen, onEnterFullscreen }) {
+export default function Panel({ offset, slide, tweakOverrides, lightingConfig, dragOffset, zoom = 1, isSettlingRef, activeVideoRef, activeSlideId, parallaxConfig = PARALLAX_DEFAULTS, fullscreenMotion, mediaScaleProgress, fullscreenScale = 2, isFullscreen, isVisuallyFullscreen, onEnterFullscreen, onVideoReady }) {
   const [loaded, setLoaded] = useState(false);
+  // Fire onVideoReady exactly once when the first canplay/load event arrives
+  // for one of the 3 initially visible cards (|offset| <= 1).
+  const hasReportedReadyRef = useRef(false);
   const [isHovered, setIsHovered] = useState(false);
   const panelRef = useRef(null);
   const videoRef = useRef(null);
@@ -548,7 +551,19 @@ export default function Panel({ offset, slide, tweakOverrides, lightingConfig, d
               {/* Play only the 3 cards in the active viewing zone (centre + immediate
                   left/right). |offset| <= 1 covers LEFT_NEAR / CENTER / RIGHT_NEAR;
                   the FAR / HIDDEN slots stay paused to save CPU/battery. */}
-              <Media slide={slide} onLoad={() => setLoaded(true)} shouldPlay={Math.abs(offset) <= 1} videoRef={videoRef} onAspectKnown={setMediaAspect} />
+              <Media
+                slide={slide}
+                onLoad={() => {
+                  setLoaded(true);
+                  if (Math.abs(offset) <= 1 && !hasReportedReadyRef.current) {
+                    hasReportedReadyRef.current = true;
+                    onVideoReady?.();
+                  }
+                }}
+                shouldPlay={Math.abs(offset) <= 1}
+                videoRef={videoRef}
+                onAspectKnown={setMediaAspect}
+              />
             </div>
           </div>
         </motion.div>

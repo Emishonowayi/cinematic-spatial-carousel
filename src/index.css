@@ -51,6 +51,16 @@ button {
   cursor: grabbing;
 }
 
+/* Loading screen wordmark pulse */
+@keyframes wordmark-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+
+.loading-wordmark {
+  animation: wordmark-pulse 2s ease-in-out infinite;
+}
+
 /* Mobile gate — shown only on small screens */
 .mobile-gate {
   display: none;
