@@ -4,10 +4,10 @@
 export const SLIDES = [
   {
     id: 0,
-    title: "Joys of Fatherhood",
-    subtitle: "Campaign · 2021",
+    title: "Still Water",
+    subtitle: "Campaign · 2023",
     type: "video",
-    src: "https://res.cloudinary.com/ddwy6x2zr/video/upload/v1779844997/10452536-hd_3840_2160_24fps_ixiviw.mp4",
+    src: "https://res.cloudinary.com/ddwy6x2zr/video/upload/v1779844950/6250115-uhd_3840_2160_25fps_cciilt.mp4",
     poster: undefined,
   },
   {
@@ -28,10 +28,10 @@ export const SLIDES = [
   },
   {
     id: 3,
-    title: "Still Water",
-    subtitle: "Campaign · 2023",
+    title: "Joys of Fatherhood",
+    subtitle: "Campaign · 2021",
     type: "video",
-    src: "https://res.cloudinary.com/ddwy6x2zr/video/upload/v1779844950/6250115-uhd_3840_2160_25fps_cciilt.mp4",
+    src: "https://res.cloudinary.com/ddwy6x2zr/video/upload/v1779844997/10452536-hd_3840_2160_24fps_ixiviw.mp4",
     poster: undefined,
   },
   {
