@@ -148,17 +148,20 @@ export default function Carousel() {
   // Clicking the centre card zooms the video to fill the viewport, pushes
   // the side cards off-screen, fades out all chrome, and unmutes the video.
   // Clicking anywhere reverses everything.
-  // Loading gate — show overlay until the 3 initially visible videos are ready.
-  // readyCount increments each time a Panel reports its first canplay event.
+  // Loading gate — show overlay until BOTH conditions are met:
+  //   1. The 3 initially visible videos have fired canplay
+  //   2. At least 3s have elapsed (so the screen never looks like a glitch)
   // Falls back after 8s so a slow connection never stays stuck.
   const [readyCount, setReadyCount] = useState(0);
-  const siteReady = readyCount >= 3;
+  const [minTimeReached, setMinTimeReached] = useState(false);
+  const siteReady = readyCount >= 3 && minTimeReached;
   const handleVideoReady = useCallback(() => {
     setReadyCount((n) => Math.min(n + 1, 3));
   }, []);
   useEffect(() => {
-    const t = setTimeout(() => setReadyCount(3), 8000);
-    return () => clearTimeout(t);
+    const minTimer = setTimeout(() => setMinTimeReached(true), 3000);
+    const fallback  = setTimeout(() => setReadyCount(3), 8000);
+    return () => { clearTimeout(minTimer); clearTimeout(fallback); };
   }, []);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
